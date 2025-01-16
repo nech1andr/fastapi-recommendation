@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Doporučení knih</title>
+  <style>
+    /* Základní reset a nastavení fontu */
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f4f4f9;
+      color: #333;
+      line-height: 1.6;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      padding: 2em;
+      border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      max-width: 500px;
+      width: 100%;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1em;
+      color: #4a90e2;
+    }
+    label {
+      display: block;
+      margin-top: 1em;
+      font-weight: bold;
+    }
+    input {
+      width: 100%;
+      padding: 0.5em;
+      margin-top: 0.25em;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1em;
+    }
+    button {
+      width: 100%;
+      padding: 0.75em;
+      margin-top: 1.5em;
+      border: none;
+      border-radius: 4px;
+      background-color: #4a90e2;
+      color: #fff;
+      font-size: 1em;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+    button:hover {
+      background-color: #357ab8;
+    }
+    #results {
+      margin-top: 2em;
+    }
+    .recommendation {
+      background: #f9f9f9;
+      padding: 0.75em;
+      margin-bottom: 0.5em;
+      border-radius: 4px;
+      border-left: 4px solid #4a90e2;
+    }
+    .error {
+      color: red;
+      margin-top: 1em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Doporučení knih</h1>
+    <label for="user_id">User ID:</label>
+    <input type="text" id="user_id" placeholder="Zadejte své User ID" />
+
+    <label for="favorite_book">Oblíbená kniha:</label>
+    <input type="text" id="favorite_book" placeholder="Zadejte název knihy" />
+
+    <button onclick="getRecommendations()">Získat doporučení</button>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function getRecommendations() {
+      const userId = document.getElementById('user_id').value.trim();
+      const favoriteBook = document.getElementById('favorite_book').value.trim();
+      const resultsDiv = document.getElementById('results');
+      resultsDiv.innerHTML = "";
+
+      if (!userId || !favoriteBook) {
+        resultsDiv.innerHTML = "<p class='error'>Prosím, vyplňte obě pole.</p>";
+        return;
+      }
+
+      const requestData = {
+        user_id: userId,
+        favorite_book: favoriteBook
+      };
+
+      try {
+        const response = await fetch('/recommend', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(requestData)
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          resultsDiv.innerHTML = `<p class='error'>Chyba: ${errorData.detail}</p>`;
+          return;
+        }
+
+        const data = await response.json();
+        if (data.recommendations && data.recommendations.length > 0) {
+          let html = `<h2>Doporučení pro knihu: ${data.favorite_book}</h2>`;
+          data.recommendations.forEach(rec => {
+            html += `<div class="recommendation"><strong>${rec.book}</strong> - odhadované hodnocení: ${rec.estimated_rating}</div>`;
+          });
+          resultsDiv.innerHTML = html;
+        } else {
+          resultsDiv.innerHTML = "<p>Nebyly nalezeny žádné doporučené knihy.</p>";
+        }
+      } catch (error) {
+        resultsDiv.innerHTML = `<p class='error'>Chyba při získávání doporučení: ${error}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>

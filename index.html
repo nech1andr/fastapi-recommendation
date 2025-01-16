@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Recommendation Engine</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; }
+        label, input, button { display: block; margin-bottom: 1em; }
+        #results { margin-top: 1em; }
+        .recommendation { margin-bottom: 0.5em; }
+    </style>
+</head>
+<body>
+    <h1>Doporučení knih</h1>
+    <label for="user_id">User ID:</label>
+    <input type="text" id="user_id" placeholder="Zadejte své user ID">
+    
+    <label for="favorite_book">Oblíbená kniha:</label>
+    <input type="text" id="favorite_book" placeholder="Zadejte název knihy">
+    
+    <button onclick="getRecommendations()">Získat doporučení</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        async function getRecommendations() {
+            const userId = document.getElementById('user_id').value.trim();
+            const favoriteBook = document.getElementById('favorite_book').value.trim();
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = "";  // Vymažeme předchozí výsledky
+
+            if (!userId || !favoriteBook) {
+                resultsDiv.innerHTML = "<p style='color:red;'>Prosím, vyplňte obě pole.</p>";
+                return;
+            }
+
+            const requestData = {
+                user_id: userId,
+                favorite_book: favoriteBook
+            };
+
+            try {
+                const response = await fetch('/recommend', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    resultsDiv.innerHTML = `<p style='color:red;'>Chyba: ${errorData.detail}</p>`;
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.recommendations && data.recommendations.length > 0) {
+                    let html = `<h2>Doporučení pro knihu: ${data.favorite_book}</h2><ul>`;
+                    data.recommendations.forEach(rec => {
+                        html += `<li class="recommendation"><strong>${rec.book}</strong> - odhadované hodnocení: ${rec.estimated_rating}</li>`;
+                    });
+                    html += `</ul>`;
+                    resultsDiv.innerHTML = html;
+                } else {
+                    resultsDiv.innerHTML = "<p>Nebyly nalezeny žádné doporučené knihy.</p>";
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `<p style='color:red;'>Chyba při získávání doporučení: ${error}</p>`;
+            }
+        }
+    </script>
+</body>
+</html>
