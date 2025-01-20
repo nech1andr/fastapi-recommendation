@@ -1,5 +1,7 @@
+
+
 #!/usr/bin/env python
-# coding: utf-8
+# # coding: utf-8
 
 import pandas as pd
 import numpy as np
@@ -11,7 +13,7 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 
 def download_csv(path: str, sep=',', encoding='cp1251') -> pd.DataFrame:
-    """stahovani nebo cteni souboru csv z cesty k souboru"""
+    """Stažení nebo čtení souboru CSV z cesty k souboru"""
     try:
         return pd.read_csv(
             path, 
@@ -25,44 +27,44 @@ def download_csv(path: str, sep=',', encoding='cp1251') -> pd.DataFrame:
         raise
 
 def clean_text_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """odstraneni whitespaces a prevod sloupcu textu na mala pismena"""
+    """Odstranění whitespace a převod textových sloupců na malá písmena"""
     text_cols = df.select_dtypes(include=['object']).columns
     for col in text_cols:
         df[col] = df[col].str.lower().str.strip()
     return df
 
 def impute_year_publication(df: pd.DataFrame) -> pd.DataFrame:
-    """chybejici nebo neplatny rok publikovani byl imputovan medianem nebo pevnou hodnotou"""
-    # prevod na ciselne hodnoty, neplatne hodnoty budou nahrazeny hodnotou NaN
+    """Chybějící nebo neplatný rok publikace je imputován mediánem nebo pevnou hodnotou"""
+    # převod na číselné hodnoty, neplatné hodnoty budou nahrazeny NaN
     df['Year-Of-Publication'] = pd.to_numeric(df['Year-Of-Publication'], errors='coerce')
 
-    # vypocet median roku nebo pouzit aktualni rok, pokud nejsou k dispozici zadne platne roky
+    # výpočet mediánu roku nebo použití aktuálního roku, pokud nejsou k dispozici žádné platné roky
     if df['Year-Of-Publication'].dropna().size > 0:
         median_year = int(df['Year-Of-Publication'].dropna().median())
     else:
         median_year = datetime.now().year
 
-    # nahradit nan medianem roku
+    # nahradit NaN mediánem roku
     df['Year-Of-Publication'] = df['Year-Of-Publication'].fillna(median_year).astype(int)
 
     return df
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    """pridani novych atributu do datove sady"""
+    """Přidání nových atributů do datové sady"""
     current_year = datetime.now().year
 
-    # novy atribut - rok publikace
+    # nový atribut - věk publikace
     df['Publication-Age'] = current_year - df['Year-Of-Publication']
 
-    # novy atribut - delka nazvu
+    # nový atribut - délka názvu
     df['Title-Length'] = df['Book-Title'].apply(lambda x: len(str(x)) if pd.notnull(x) else 0)
 
-    # prevod vybranych sloupcu na kategorialni datovy typ pro optimalizaci pameti
+    # převod vybraných sloupců na kategorický datový typ pro optimalizaci paměti
     categorical_cols = ['Book-Author', 'Publisher']
     for col in categorical_cols:
         df[col] = df[col].astype('category')
 
-    # prumerne hodnoceni podle autora a vydavatele
+    # průměrné hodnocení podle autora a vydavatele
     author_avg_rating = df.groupby('Book-Author', observed=False)['Book-Rating'].transform('mean')
     publisher_avg_rating = df.groupby('Publisher', observed=False)['Book-Rating'].transform('mean')
     df['Author-Avg-Rating'] = author_avg_rating
@@ -70,49 +72,58 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
     return df
 
-def clean_and_merge_data(ratings: pd.DataFrame, books: pd.DataFrame) -> pd.DataFrame:
-    """vycisteni a slouceni udaju o hodnoceni a knihach a pote provedeni feature engineeringu"""
-    # odstranei nulovych hodnoceni a duplicit
+def clean_and_merge_data(ratings: pd.DataFrame, books: pd.DataFrame, users: pd.DataFrame) -> pd.DataFrame:
+    """Vyčištění a sloučení dat o hodnoceních, knihách a uživatelích a provedení feature engineeringu"""
+    # odstranění nulových hodnocení a duplicit
     ratings = ratings[ratings['Book-Rating'] != 0].drop_duplicates()
     books = books.drop_duplicates()
 
-    # volani f-ci clean_text_columns
+    # volání funkce clean_text_columns
     books = clean_text_columns(books)
     ratings = clean_text_columns(ratings)
+    users = clean_text_columns(users)
 
-    # sjednoceni datasetu pres ISBN s vyuzitim inner join
+    # sloučení datasetů přes ISBN s využitím inner join
     merged = pd.merge(ratings, books, on='ISBN', how='inner')
 
-    # odstraneni radku s chybejicimi zakladnimi hodnotami
+    # odstranění řádků s chybějícími základními hodnotami
     merged.dropna(subset=['Book-Title', 'Book-Author', 'User-ID', 'Book-Rating'], inplace=True)
 
-    # volani f-ce impute_year_publication
+    # imputace roku publikace
     merged = impute_year_publication(merged)
 
-    # timto volanim fce pridame nove atributy
+    # přidání nových atributů
     merged = add_features(merged)
+
+    # sloučení s informacemi o uživatelích na základě sloupce 'User-ID'
+    merged = pd.merge(merged, users, on='User-ID', how='left')
+
+    # Imputace chybějících hodnot ve sloupci Age pomocí mediánu
+    if 'Age' in merged.columns:
+        # Převedení sloupce Age na numerický typ, pokud ještě není
+        merged['Age'] = pd.to_numeric(merged['Age'], errors='coerce')
+        median_age = merged['Age'].median()
+        merged['Age'] = merged['Age'].fillna(median_age)
 
     return merged
 
-# cesta do datasetu
+# Cesty k datasetům
 ratings_path = r'./data/Ratings.csv'
 users_path = r'./data/Users.csv'
 books_path = r'./data/Books.csv'
 
-# nacteni dat
+# Načtení dat
 ratings_df = download_csv(ratings_path)
 users_df = download_csv(users_path)
 books_df = download_csv(books_path)
 
-# cisteni a sjednoceni dat
-cleaned_dataset = clean_and_merge_data(ratings_df, books_df)
+# Čištění a sloučení dat včetně informací o uživatelích
+cleaned_dataset = clean_and_merge_data(ratings_df, books_df, users_df)
 
-# ulozeni df do parquet pro dalsi vyuziti
+# Uložení DataFrame do Parquet pro další využití
 cleaned_dataset.to_parquet('cleaned_dataset.parquet', index=False)
 logging.info("Data byla úspěšně vyčištěna a uložena.")
 
-# verifikace zda parquet soubor byl nacten
+# Verifikace, zda byl Parquet soubor načten
 df = pd.read_parquet('cleaned_dataset.parquet')
 logging.info(f"Loaded dataset with shape: {df.shape}")
-
-
